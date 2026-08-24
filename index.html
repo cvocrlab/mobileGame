@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<!-- 모바일 화면 비율에 맞게 고정 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>우주선 피하기</title>
+<style>
+  body { 
+    margin: 0; 
+    overflow: hidden; 
+    background-color: #0a0a2a; 
+    touch-action: none; /* 모바일 스크롤/줌 방지 */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  canvas { 
+    display: block; 
+    width: 100vw; 
+    height: 100vh; 
+  }
+  #ui { 
+    position: absolute; 
+    top: 20px; 
+    left: 20px; 
+    color: #00ffcc; 
+    font-size: 24px; 
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="ui">점수: 0</div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('ui');
+
+  // 캔버스 크기 설정
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // 게임 변수
+  let player = { x: canvas.width / 2, y: canvas.height - 100, width: 40, height: 40 };
+  let asteroids = [];
+  let stars = [];
+  let score = 0;
+  let gameOver = false;
+  let frameCount = 0;
+  let touchX = null;
+
+  // 배경 별 생성
+  for (let i = 0; i < 50; i++) {
+    stars.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      size: Math.random() * 2,
+      speed: Math.random() * 2 + 1
+    });
+  }
+
+  // 터치 및 마우스 이벤트
+  function handleStart(x) {
+    touchX = x;
+    if (gameOver) restart();
+  }
+  function handleMove(x) { touchX = x; }
+  function handleEnd() { touchX = null; }
+
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleStart(e.touches[0].clientX); });
+  canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e.touches[0].clientX); });
+  canvas.addEventListener('touchend', handleEnd);
+  
+  canvas.addEventListener('mousemove', (e) => handleMove(e.clientX));
+  canvas.addEventListener('click', () => { if (gameOver) restart(); });
+
+  function restart() {
+    player.x = canvas.width / 2;
+    asteroids = [];
+    score = 0;
+    gameOver = false;
+    frameCount = 0;
+    loop();
+  }
+
+  function spawnAsteroid() {
+    asteroids.push({
+      x: Math.random() * (canvas.width - 30),
+      y: -30,
+      width: 30,
+      height: 30,
+      speed: Math.random() * 3 + 3 + (score / 1000) // 점수가 오를수록 빨라짐
+    });
+  }
+
+  function update() {
+    if (gameOver) return;
+    frameCount++;
+
+    // 플레이어 이동 (터치 위치로 부드럽게 따라감)
+    if (touchX !== null) {
+      player.x = touchX - player.width / 2;
+    }
+    // 화면 밖으로 나가지 않도록 제한
+    if (player.x < 0) player.x = 0;
+    if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+
+    // 운석 생성
+    if (frameCount % 20 === 0) spawnAsteroid();
+
+    // 별 및 운석 업데이트
+    stars.forEach(s => {
+      s.y += s.speed;
+      if (s.y > canvas.height) s.y = 0;
+    });
+
+    for (let i = asteroids.length - 1; i >= 0; i--) {
+      let a = asteroids[i];
+      a.y += a.speed;
+
+      // 충돌 체크
+      if (player.x < a.x + a.width &&
+          player.x + player.width > a.x &&
+          player.y < a.y + a.height &&
+          player.y + player.height > a.y) {
+        gameOver = true;
+      }
+
+      // 화면 밖으로 나간 운석 제거 및 점수 획득
+      if (a.y > canvas.height) {
+        asteroids.splice(i, 1);
+        score += 10;
+      }
+    }
+    scoreEl.innerText = "점수: " + score;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 배경 별 그리기
+    ctx.fillStyle = '#ffffff';
+    stars.forEach(s => {
+      ctx.fillRect(s.x, s.y, s.size, s.size);
+    });
+
+    // 플레이어 (우주선) 그리기
+    ctx.fillStyle = '#00ffcc';
+    ctx.beginPath();
+    ctx.moveTo(player.x + player.width / 2, player.y);
+    ctx.lineTo(player.x, player.y + player.height);
+    ctx.lineTo(player.x + player.width, player.y + player.height);
+    ctx.closePath();
+    ctx.fill();
+    
+    // 우주선 엔진 불꽃
+    ctx.fillStyle = '#ffaa00';
+    ctx.beginPath();
+    ctx.moveTo(player.x + 10, player.y + player.height);
+    ctx.lineTo(player.x + player.width / 2, player.y + player.height + 15 + Math.random() * 5);
+    ctx.lineTo(player.x + player.width - 10, player.y + player.height);
+    ctx.fill();
+
+    // 운석 그리기
+    ctx.fillStyle = '#ff4444';
+    for (let a of asteroids) {
+      ctx.fillRect(a.x, a.y, a.width, a.height);
+      ctx.fillStyle = '#aa0000';
+      ctx.fillRect(a.x + 5, a.y + 5, 10, 10); // 운석 디테일
+      ctx.fillStyle = '#ff4444';
+    }
+
+    // 게임 오버 화면
+    if (gameOver) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 40px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText("게임 오버!", canvas.width / 2, canvas.height / 2 - 20);
+      
+      ctx.font = '20px sans-serif';
+      ctx.fillStyle = '#00ffcc';
+      ctx.fillText("최종 점수: " + score, canvas.width / 2, canvas.height / 2 + 20);
+      ctx.fillStyle = 'white';
+      ctx.fillText("화면을 터치하여 재시작", canvas.width / 2, canvas.height / 2 + 60);
+    }
+  }
+
+  function loop() {
+    update();
+    draw();
+    if (!gameOver) requestAnimationFrame(loop);
+  }
+
+  loop();
+</script>
+</body>
+</html>
